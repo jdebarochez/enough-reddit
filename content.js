@@ -1,9 +1,8 @@
 (function() {
   'use strict';
 
-  const POST_SELECTOR = '[data-testid="post-container"]';
+  const POST_SELECTOR = 'article';
   const COMMENT_PATTERN = /^\/r\/[\w]+\/comments\//;
-  const PINNED_SELECTOR = '[data-testid="post-container"][data-prefixed-id]';
   const SEEN_ATTR = 'data-enough-reddit-seen';
   const HIDDEN_ATTR = 'data-enough-reddit-hidden';
 
@@ -11,44 +10,43 @@
 
   let threshold = DEFAULT_THRESHOLD;
   let counter = 0;
-  let allowedUpTo = 0;
+  // FIX: allowedUpTo starts at threshold (the initial grant), not 0.
+  // It represents the total number of posts the user has ever unlocked
+  // across all "Load more" clicks in this session.
+  let allowedUpTo = DEFAULT_THRESHOLD;
   let isOverlayActive = false;
 
   let intersectionObserver = null;
   let mutationObserver = null;
-  let feedContainer = null;
   let overlayElement = null;
   let lastUrl = window.location.href;
 
-  function isCommentPage(pathname) {
-    return COMMENT_PATTERN.test(pathname);
+  // --- Badge (proxied through background.js) ---
+
+  function updateBadge() {
+    const remaining = Math.max(0, threshold - counter);
+    browser.runtime.sendMessage({
+      type: 'SET_BADGE',
+      text: remaining.toString(),
+      color: '#cc0000'
+    });
   }
 
-  function isPinnedPost(element) {
-    const pinIndicator = element.querySelector('[data-testid="post-meta-text"]');
-    if (pinIndicator && pinIndicator.textContent.toLowerCase().includes('pinned')) {
-      return true;
-    }
-    return false;
+  function clearBadge() {
+    browser.runtime.sendMessage({ type: 'SET_BADGE', text: '' });
+  }
+
+  // --- Utilities ---
+
+  function isCommentPage(pathname) {
+    return COMMENT_PATTERN.test(pathname);
   }
 
   function getAllPosts() {
     return Array.from(document.querySelectorAll(POST_SELECTOR));
   }
 
-  function getVisiblePosts() {
-    return Array.from(document.querySelectorAll(`${POST_SELECTOR}:not([${SEEN_ATTR}])`));
-  }
-
-  function findFeedContainer() {
-    const candidates = document.querySelectorAll('main [role="feed"], [data-testid="front-page-feed"]');
-    for (const container of candidates) {
-      if (container.clientHeight > 0 || container.childElementCount > 0) {
-        return container;
-      }
-    }
-    return candidates[0] || null;
-  }
+  // --- Show / hide individual posts ---
 
   function hidePost(element) {
     element.style.visibility = 'hidden';
@@ -62,23 +60,24 @@
     element.removeAttribute(HIDDEN_ATTR);
   }
 
-  function hidePostsBeyondAllowed() {
-    const posts = getAllPosts();
-    posts.forEach((post, index) => {
-      if (index >= allowedUpTo && counter >= threshold) {
+  // FIX: Hide posts whose index is >= allowedUpTo.
+  // No longer guards on counter — allowedUpTo IS the source of truth
+  // for what the user has been granted to view.
+  function enforceHiding() {
+    getAllPosts().forEach((post, index) => {
+      if (index >= allowedUpTo) {
         hidePost(post);
+      } else {
+        // Reveal posts that are now within the new allowedUpTo window
+        // (needed after each "Load more" click).
+        if (post.hasAttribute(HIDDEN_ATTR)) {
+          showPost(post);
+        }
       }
     });
   }
 
-  function showPostsUpToAllowed() {
-    const posts = getAllPosts();
-    posts.forEach((post, index) => {
-      if (index < allowedUpTo) {
-        showPost(post);
-      }
-    });
-  }
+  // --- Overlay ---
 
   function createOverlay() {
     if (overlayElement) return;
@@ -87,15 +86,14 @@
     overlayElement.id = 'enough-reddit-overlay';
     overlayElement.innerHTML = `
       <div class="enough-reddit-card">
-        <h2 class="enough-reddit-title">You've scrolled through ${counter} posts.</h2>
+        <h2 class="enough-reddit-title">You've scrolled through ${allowedUpTo} posts.</h2>
         <p class="enough-reddit-message">Take a break?</p>
         <button class="enough-reddit-button" id="enough-reddit-load-more">
-          Load more
+          Load ${threshold} more
         </button>
       </div>
     `;
     document.body.appendChild(overlayElement);
-
     document.getElementById('enough-reddit-load-more').addEventListener('click', handleLoadMore);
   }
 
@@ -109,119 +107,69 @@
   function showOverlay() {
     if (isOverlayActive) return;
     isOverlayActive = true;
-
     clearBadge();
-    hidePostsBeyondAllowed();
-    createOverlay();
 
     if (intersectionObserver) {
       intersectionObserver.disconnect();
     }
-  }
 
-  function hideOverlay() {
-    if (!isOverlayActive) return;
-    isOverlayActive = false;
-    removeOverlay();
+    enforceHiding();
+    createOverlay();
   }
 
   function handleLoadMore() {
+    // Unlock exactly one more batch of threshold posts.
     allowedUpTo += threshold;
     counter = 0;
+    isOverlayActive = false;
+
+    removeOverlay();
+    enforceHiding();       // reveals posts now within allowedUpTo, hides rest
     updateBadge();
-
-    showPostsUpToAllowed();
-
-    if (allowedUpTo >= threshold) {
-      hideOverlay();
-      observeNewPosts();
-    } else {
-      isOverlayActive = false;
-      removeOverlay();
-      observeNewPosts();
-    }
+    observeUnseen();       // re-attach IntersectionObserver to newly visible posts
   }
 
-  function updateBadge() {
-    const remaining = Math.max(0, threshold - counter);
-    browser.action.setBadgeText({ text: remaining.toString() });
-    browser.action.setBadgeBackgroundColor({ color: '#ff4500' });
-  }
-
-  function clearBadge() {
-    browser.action.setBadgeText({ text: '' });
-  }
-
-  function handlePostIntersection(entries) {
-    if (isOverlayActive) return;
-
-    entries.forEach(entry => {
-      if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-        const post = entry.target;
-        if (post.hasAttribute(SEEN_ATTR)) return;
-        if (isPinnedPost(post)) return;
-
-        post.setAttribute(SEEN_ATTR, 'true');
-        counter++;
-        updateBadge();
-
-        if (counter >= threshold) {
-          showOverlay();
-        }
-      }
-    });
-  }
+  // --- Intersection Observer (counts viewed posts) ---
 
   function initIntersectionObserver() {
     if (intersectionObserver) {
       intersectionObserver.disconnect();
     }
-
     intersectionObserver = new IntersectionObserver(handlePostIntersection, {
       threshold: 0.5,
       root: null
     });
   }
 
-  function observePost(post) {
-    if (!post.hasAttribute(SEEN_ATTR) && !post.hasAttribute(HIDDEN_ATTR)) {
-      intersectionObserver.observe(post);
-    }
-  }
+  function handlePostIntersection(entries) {
+    if (isOverlayActive) return;
 
-  function observeNewPosts() {
-    const posts = getVisiblePosts();
-    posts.forEach(post => {
-      if (!isPinnedPost(post)) {
-        observePost(post);
+    entries.forEach(entry => {
+      if (!entry.isIntersecting || entry.intersectionRatio < 0.5) return;
+
+      const post = entry.target;
+      if (post.hasAttribute(SEEN_ATTR)) return;
+
+      post.setAttribute(SEEN_ATTR, 'true');
+      intersectionObserver.unobserve(post);
+      counter++;
+      updateBadge();
+
+      if (counter >= threshold) {
+        showOverlay();
       }
     });
   }
 
-  function handleMutations(mutations) {
-    mutations.forEach(mutation => {
-      mutation.addedNodes.forEach(node => {
-        if (node.nodeType !== Node.ELEMENT_NODE) return;
-
-        const posts = node.querySelectorAll ? node.querySelectorAll(POST_SELECTOR) : [];
-        posts.forEach(post => {
-          if (counter >= threshold) {
-            hidePost(post);
-          } else if (!post.hasAttribute(SEEN_ATTR) && !isPinnedPost(post)) {
-            observePost(post);
-          }
-        });
-
-        if (node.matches && node.matches(POST_SELECTOR)) {
-          if (counter >= threshold) {
-            hidePost(node);
-          } else if (!node.hasAttribute(SEEN_ATTR) && !isPinnedPost(node)) {
-            observePost(node);
-          }
-        }
-      });
+  function observeUnseen() {
+    getAllPosts().forEach(post => {
+      if (!post.hasAttribute(SEEN_ATTR) && !post.hasAttribute(HIDDEN_ATTR)) {
+        intersectionObserver.observe(post);
+      }
     });
   }
+
+  // --- Mutation Observer (registers new posts inserted by Reddit's SPA) ---
 
   function initMutationObserver() {
     if (mutationObserver) {
@@ -229,17 +177,46 @@
     }
 
     mutationObserver = new MutationObserver(handleMutations);
-    mutationObserver.observe(document.body, {
-      childList: true,
-      subtree: true
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function handleMutations(mutations) {
+    mutations.forEach(mutation => {
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+        // Collect any post-container nodes in the subtree, plus the node itself.
+        const posts = [];
+        if (node.matches && node.matches(POST_SELECTOR)) posts.push(node);
+        if (node.querySelectorAll) {
+          node.querySelectorAll(POST_SELECTOR).forEach(p => posts.push(p));
+        }
+
+        posts.forEach(post => {
+          const allPosts = getAllPosts();
+          const index = allPosts.indexOf(post);
+
+          // FIX: hide based on index vs allowedUpTo, not counter vs threshold.
+          // This correctly hides posts beyond the current unlock window even
+          // when counter has just been reset to 0 after a "Load more" click.
+          if (index !== -1 && index >= allowedUpTo) {
+            hidePost(post);
+          } else if (!post.hasAttribute(SEEN_ATTR) && !isOverlayActive) {
+            intersectionObserver.observe(post);
+          }
+        });
+      });
     });
   }
 
+  // --- Navigation (SPA URL change detection) ---
+
   function reset() {
     counter = 0;
-    allowedUpTo = 0;
+    allowedUpTo = threshold;   // reset to the initial grant for the new page
     isOverlayActive = false;
-    updateBadge();
+
+    removeOverlay();
 
     getAllPosts().forEach(post => {
       post.removeAttribute(SEEN_ATTR);
@@ -247,13 +224,11 @@
       showPost(post);
     });
 
-    removeOverlay();
     initIntersectionObserver();
+    updateBadge();
 
-    feedContainer = findFeedContainer();
-    if (feedContainer) {
-      observeNewPosts();
-    }
+    // Give the SPA a moment to render the new feed before observing.
+    setTimeout(observeUnseen, 800);
   }
 
   function checkUrlChange() {
@@ -264,31 +239,6 @@
       }
     }
   }
-      }
-    }
-  }
-
-  function init() {
-    if (isCommentPage(window.location.pathname)) {
-      return;
-    }
-
-    run();
-  }
-
-  function run() {
-    initIntersectionObserver();
-    initMutationObserver();
-    updateBadge();
-
-    feedContainer = findFeedContainer();
-
-    setTimeout(() => {
-      observeNewPosts();
-    }, 1000);
-
-    setInterval(checkUrlChange, 500);
-  }
 
   const originalPushState = history.pushState;
   history.pushState = function() {
@@ -296,13 +246,30 @@
     setTimeout(checkUrlChange, 100);
   };
 
-  window.addEventListener('popstate', () => {
-    setTimeout(checkUrlChange, 100);
-  });
+  window.addEventListener('popstate', () => setTimeout(checkUrlChange, 100));
+
+  // --- Init ---
+
+  function init() {
+    if (isCommentPage(window.location.pathname)) return;
+
+    // Load user-configured threshold before starting.
+    
+    threshold = DEFAULT_THRESHOLD;
+    allowedUpTo = threshold;   // keep in sync after threshold is loaded
+
+    initIntersectionObserver();
+    initMutationObserver();
+    updateBadge();
+
+    setTimeout(observeUnseen, 800);
+    
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
+
 })();
