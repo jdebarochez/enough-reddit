@@ -62,3 +62,8 @@
   outline: 2px solid #ff4500;
   outline-offset: 2px;
 }
+
+.enough-reddit-scroll-lock,
+.enough-reddit-scroll-lock body {
+  overflow: hidden !important;
+}

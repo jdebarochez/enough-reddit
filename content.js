@@ -98,16 +98,28 @@
   }
 
   function removeOverlay() {
+    disableScrollLock();
     if (overlayElement) {
       overlayElement.remove();
       overlayElement = null;
     }
   }
 
+  function enableScrollLock() {
+    document.documentElement.classList.add('enough-reddit-scroll-lock');
+    document.body.classList.add('enough-reddit-scroll-lock');
+  }
+
+  function disableScrollLock() {
+    document.documentElement.classList.remove('enough-reddit-scroll-lock');
+    document.body.classList.remove('enough-reddit-scroll-lock');
+  }
+
   function showOverlay() {
     if (isOverlayActive) return;
     isOverlayActive = true;
     clearBadge();
+    enableScrollLock();
 
     if (intersectionObserver) {
       intersectionObserver.disconnect();
