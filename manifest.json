@@ -3,9 +3,7 @@
   "name": "enough-reddit",
   "version": "1.0.0",
   "description": "Limit how many Reddit posts you scroll past in one session",
-  "permissions": [
-    "storage"
-  ],
+  "permissions": [],
   "host_permissions": [
     "*://*.reddit.com/*"
   ],

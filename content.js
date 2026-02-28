@@ -273,14 +273,7 @@
       return;
     }
 
-    browser.storage.sync.get('threshold').then(result => {
-      if (result.threshold) {
-        threshold = result.threshold;
-      }
-      run();
-    }).catch(() => {
-      run();
-    });
+    run();
   }
 
   function run() {
