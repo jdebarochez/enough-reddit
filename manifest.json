@@ -14,7 +14,7 @@
       }
     }
   },
-  "permissions": [],
+  "permissions": ["storage"],
   "host_permissions": [
     "*://*.reddit.com/*"
   ],

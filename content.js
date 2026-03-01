@@ -271,16 +271,23 @@
     if (isCommentPage(window.location.pathname)) return;
 
     // Load user-configured threshold before starting.
-    
-    threshold = DEFAULT_THRESHOLD;
-    allowedUpTo = threshold;   // keep in sync after threshold is loaded
+    browser.storage.sync.get('threshold').then(result => {
+      if (result.threshold) {
+        threshold = result.threshold;
+        allowedUpTo = threshold;
+      }
+    }).catch((e) => {
+      console.error('Error loading threshold', e);
+      threshold = DEFAULT_THRESHOLD;
+      allowedUpTo = threshold;
+    }).then(() => {
+      initIntersectionObserver();
+      initMutationObserver();
+      updateBadge();
 
-    initIntersectionObserver();
-    initMutationObserver();
-    updateBadge();
+      setTimeout(observeUnseen, 800);
+    });
 
-    setTimeout(observeUnseen, 800);
-    
   }
 
   if (document.readyState === 'loading') {
