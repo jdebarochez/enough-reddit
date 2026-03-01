@@ -81,8 +81,8 @@ enough-reddit/
 ## Roadmap
 
 - [x] Progress indicator showing posts remaining before next block
+- [x] Configurable threshold via settings popup
 - [ ] Submission to addons.mozilla.org
-- [ ] Configurable threshold via settings popup
 - [ ] Daily post limit across all sessions
 - [ ] Snooze option on the overlay
 - [ ] Chrome / Chromium support
