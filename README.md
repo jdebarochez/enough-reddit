@@ -30,12 +30,11 @@ After scrolling past a set number of posts, a full-screen overlay appears and bl
 
 ### Temporary (development)
 
-1. Clone or download this repository
-2. Open Firefox and navigate to `about:debugging`
-3. Click **This Firefox** → **Load Temporary Add-on**
-4. Select the `manifest.json` file from the project folder
+Using web-ext, you can run this extension with:
 
-The extension will be active until Firefox is restarted.
+```bash
+web-ext run --firefox=deved
+```
 
 ### Persistent
 
