@@ -87,3 +87,7 @@ module.exports = {
   ]
 };
 ```
+
+## Committing
+
+Always lint before commit. Messages use the conventional commits structure for messages.
