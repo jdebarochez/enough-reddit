@@ -84,15 +84,20 @@
 
     overlayElement = document.createElement('div');
     overlayElement.id = 'enough-reddit-overlay';
-    overlayElement.innerHTML = `
-      <div class="enough-reddit-card">
-        <h2 class="enough-reddit-title">You've scrolled through ${allowedUpTo} posts.</h2>
-        <p class="enough-reddit-message">Take a break?</p>
-        <button class="enough-reddit-button" id="enough-reddit-load-more">
-          Load ${threshold} more
-        </button>
-      </div>
-    `;
+    const card = document.createElement('div');
+    card.className = 'enough-reddit-card';
+    const title = document.createElement('h2');
+    title.className = 'enough-reddit-title';
+    title.textContent = `You've scrolled through ${allowedUpTo} posts.`;
+    const message = document.createElement('p');
+    message.className = 'enough-reddit-message';
+    message.textContent = 'Take a break?';
+    const button = document.createElement('button');
+    button.className = 'enough-reddit-button';
+    button.id = 'enough-reddit-load-more';
+    button.textContent = `Load ${threshold} more`;
+    card.append(title, message, button);
+    overlayElement.appendChild(card);
     document.body.appendChild(overlayElement);
     document.getElementById('enough-reddit-load-more').addEventListener('click', handleLoadMore);
   }
