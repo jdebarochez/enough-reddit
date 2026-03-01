@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "enough-reddit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Limit how many Reddit posts you scroll past in one session",
   "id": "{b0c8e5f4-7a3d-4e9b-8c1f-2d6e8a5b4c3e}",
   "browser_specific_settings": {
